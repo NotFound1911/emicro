@@ -1,4 +1,4 @@
-package grpc
+package grpc_resolver
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"time"
 )
 
-// protoc --go_out=. --go-grpc_out=. user.proto
 func TestClient(t *testing.T) {
-	cc, err := grpc.Dial("localhost:8081", grpc.WithInsecure())
+	// grpc.WithResolvers(&Builder{})指定了一个解析器，这里使用了前面定义的Builder结构体
+	cc, err := grpc.Dial("registry://localhost:8081", grpc.WithInsecure(), grpc.WithResolvers(&Builder{}))
 	require.NoError(t, err)
 	client := gen.NewUserServiceClient(cc)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
