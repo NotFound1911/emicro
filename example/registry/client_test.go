@@ -16,16 +16,18 @@ func TestClient(t *testing.T) {
 		Endpoints: []string{"localhost:2379"},
 	})
 	require.NoError(t, err)
+	// 注册中心创建
 	r, err := etcd.NewRegistry(etcdClient)
 	require.NoError(t, err)
-
+	// 客户端建立
 	client, err := emicro.NewClient(emicro.ClientInsecure(), emicro.ClientWithRegistry(r, time.Second*3))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
 	defer cancel()
 	require.NoError(t, err)
-
+	// 与服务建立连接
 	cc, err := client.Dial(ctx, "user-service")
 	require.NoError(t, err)
+	// 使用前面建立的连接创建一个新的客户端实例
 	uc := gen.NewUserServiceClient(cc)
 	resp, err := uc.GetById(ctx, &gen.GetByIdReq{Id: 123})
 	require.NoError(t, err)

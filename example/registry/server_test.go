@@ -20,6 +20,7 @@ func TestServer(t *testing.T) {
 	require.NoError(t, err)
 	us := UserServiceServer{}
 	server, err := emicro.NewServer("user-service", emicro.ServerWithRegistry(r))
+	// 服务注册
 	gen.RegisterUserServiceServer(server, us)
 
 	err = server.Start(":8081")

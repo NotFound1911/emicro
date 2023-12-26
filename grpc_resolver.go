@@ -68,6 +68,7 @@ func (g *grpcResolver) watch() {
 func (g *grpcResolver) resolve() {
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
 	defer cancel()
+	// 获取实例
 	instances, err := g.r.ListServices(ctx, g.target.Endpoint())
 	if err != nil {
 		g.cc.ReportError(err)

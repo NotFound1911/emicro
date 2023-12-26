@@ -18,6 +18,8 @@ type Server struct {
 	listener net.Listener
 }
 
+var _ grpc.ServiceRegistrar = &Server{}
+
 func NewServer(name string, opts ...ServerOption) (*Server, error) {
 	res := &Server{
 		Name:            name,

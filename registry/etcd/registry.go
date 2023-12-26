@@ -10,15 +10,16 @@ import (
 	"sync"
 )
 
+// Registry 服务注册中心
 type Registry struct {
-	c       *clientv3.Client
-	sess    *concurrency.Session
-	cancels []func()
+	c       *clientv3.Client     // etcd的客户端，用于与etcd交互
+	sess    *concurrency.Session // 用于管理并发操作的会话
+	cancels []func()             // 存储取消函数的切片，用于取消订阅
 	mutex   sync.Mutex
 }
 
 func NewRegistry(c *clientv3.Client) (*Registry, error) {
-	sess, err := concurrency.NewSession(c) // 60s
+	sess, err := concurrency.NewSession(c) // 创建一个会话, 默认超时60s
 	if err != nil {
 		return nil, err
 	}
@@ -28,25 +29,31 @@ func NewRegistry(c *clientv3.Client) (*Registry, error) {
 	}, nil
 }
 
+// Register 将服务实例注册到注册中心
 func (r *Registry) Register(ctx context.Context, si registry.ServiceInstance) error {
 	val, err := json.Marshal(si)
 	if err != nil {
 		return err
 	}
+	// 使用etcd的Put方法将服务实例存储到注册中心，并设置租约
 	_, err = r.c.Put(ctx, r.instanceKey(si), string(val), clientv3.WithLease(r.sess.Lease()))
 	return err
 }
 
+// UnRegister 用于从注册中心取消注册服务实例
 func (r *Registry) UnRegister(ctx context.Context, si registry.ServiceInstance) error {
-	_, err := r.c.Delete(ctx, r.instanceKey(si))
+	_, err := r.c.Delete(ctx, r.instanceKey(si)) // 使用etcd的Delete方法删除服务实例的记录
 	return err
 }
 
+// ListServices 列出指定服务名的所有服务实例
 func (r *Registry) ListServices(ctx context.Context, serviceName string) ([]registry.ServiceInstance, error) {
+	// 使用etcd的Get方法获取指定服务名的所有服务实例的记录
 	getResp, err := r.c.Get(ctx, r.serviceKey(serviceName), clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
 	}
+	// 用于存储服务实例
 	res := make([]registry.ServiceInstance, 0, len(getResp.Kvs))
 	for _, kv := range getResp.Kvs {
 		var si registry.ServiceInstance
@@ -59,12 +66,14 @@ func (r *Registry) ListServices(ctx context.Context, serviceName string) ([]regi
 	return res, nil
 }
 
+// Subscribe 订阅指定服务名的服务实例变化事件
 func (r *Registry) Subscribe(serviceName string) (<-chan registry.Event, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r.mutex.Lock()
 	r.cancels = append(r.cancels, cancel)
 	r.mutex.Unlock()
-	ctx = clientv3.WithRequireLeader(ctx)
+	ctx = clientv3.WithRequireLeader(ctx) // 要求客户端请求只有在集群具有leader时才能成功
+	// 使用etcd的Watch方法开始监视指定服务名的服务实例变化事件（使用前缀匹配）
 	watchResp := r.c.Watch(ctx, r.serviceKey(serviceName), clientv3.WithPrefix())
 	res := make(chan registry.Event)
 	go func() {

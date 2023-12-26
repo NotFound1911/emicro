@@ -34,6 +34,8 @@ func ClientWithRegistry(r registry.Registry, timeout time.Duration) ClientOption
 		c.timeout = timeout
 	}
 }
+
+// Dial 与服务建立连接
 func (c *Client) Dial(ctx context.Context, service string, dialOptions ...grpc.DialOption) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if c.r != nil {
