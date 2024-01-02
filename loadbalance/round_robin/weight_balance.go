@@ -1,8 +1,10 @@
 package round_robin
 
 import (
+	"github.com/NotFound1911/emicro/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/resolver"
 	"math"
 	"sync"
 )
@@ -11,7 +13,7 @@ var _ balancer.Picker = &WeightBalancer{}
 
 type WeightBalancer struct {
 	connections []*weightConn
-	//mutex sync.Mutex
+	filter      loadbalance.Filter
 }
 
 func (w *WeightBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
@@ -21,6 +23,9 @@ func (w *WeightBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 	var totalWeight uint32
 	var res *weightConn
 	for _, c := range w.connections {
+		if w.filter != nil && w.filter(info, c.addr) { // 过滤
+			continue
+		}
 		c.mutex.Lock()
 		totalWeight = totalWeight + c.efficientWeight
 		c.currentWeight = c.currentWeight + c.efficientWeight
@@ -56,6 +61,7 @@ func (w *WeightBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 var _ base.PickerBuilder = &WeightBalancerBuilder{}
 
 type WeightBalancerBuilder struct {
+	Filter loadbalance.Filter
 }
 
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
@@ -68,6 +74,7 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 			weight:          weight,
 			currentWeight:   weight,
 			efficientWeight: weight,
+			addr:            subInfo.Address,
 		})
 	}
 	return &WeightBalancer{
@@ -81,4 +88,5 @@ type weightConn struct {
 	weight          uint32
 	currentWeight   uint32
 	efficientWeight uint32
+	addr            resolver.Address
 }

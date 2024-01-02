@@ -1,23 +1,32 @@
 package random
 
 import (
+	"github.com/NotFound1911/emicro/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/resolver"
 	"math/rand"
 )
 
 type Balancer struct {
-	connections []balancer.SubConn
-	length      int
+	connections []subConn
+	filter      loadbalance.Filter
 }
 
-func (b Balancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if b.length == 0 {
+func (b *Balancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
+	candidates := make([]subConn, 0, len(b.connections))
+	for _, c := range b.connections {
+		if b.filter != nil && !b.filter(info, c.addr) {
+			continue
+		}
+		candidates = append(candidates, c)
+	}
+	if len(candidates) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	idx := rand.Intn(b.length)
+	idx := rand.Intn(len(candidates))
 	return balancer.PickResult{
-		SubConn: b.connections[idx],
+		SubConn: candidates[idx].c,
 		Done: func(info balancer.DoneInfo) {
 
 		},
@@ -25,15 +34,24 @@ func (b Balancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
 }
 
 type BalancerBuilder struct {
+	Filter loadbalance.Filter
 }
 
-func (b BalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
-	connections := make([]balancer.SubConn, 0, len(info.ReadySCs))
-	for c := range info.ReadySCs {
-		connections = append(connections, c)
+func (b *BalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
+	connections := make([]subConn, 0, len(info.ReadySCs))
+	for c, ci := range info.ReadySCs {
+		connections = append(connections, subConn{
+			c:    c,
+			addr: ci.Address,
+		})
 	}
 	return &Balancer{
 		connections: connections,
-		length:      len(connections),
+		filter:      b.Filter,
 	}
+}
+
+type subConn struct {
+	c    balancer.SubConn
+	addr resolver.Address
 }

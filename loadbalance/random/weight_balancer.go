@@ -1,23 +1,34 @@
 package random
 
 import (
+	"github.com/NotFound1911/emicro/loadbalance"
 	"google.golang.org/grpc/balancer"
 	"google.golang.org/grpc/balancer/base"
+	"google.golang.org/grpc/resolver"
 	"math/rand"
 )
 
 type WeightBalancer struct {
 	connections []*weightConn
-	totalWeight uint32
+	filter      loadbalance.Filter
 }
 
 func (w *WeightBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, error) {
-	if len(w.connections) == 0 {
+	var totalWeight uint32
+	candidates := make([]*weightConn, 0, len(w.connections))
+	for _, c := range w.connections {
+		if w.filter != nil && !w.filter(info, c.addr) {
+			continue
+		}
+		candidates = append(candidates, c)
+		totalWeight = totalWeight + c.weight
+	}
+	if len(candidates) == 0 {
 		return balancer.PickResult{}, balancer.ErrNoSubConnAvailable
 	}
-	tgt := rand.Intn(int(w.totalWeight) + 1)
+	tgt := rand.Intn(int(totalWeight) + 1)
 	var idx int
-	for i, c := range w.connections {
+	for i, c := range candidates {
 		tgt = tgt - int(c.weight)
 		if tgt <= 0 {
 			idx = i
@@ -33,6 +44,7 @@ func (w *WeightBalancer) Pick(info balancer.PickInfo) (balancer.PickResult, erro
 }
 
 type WeightBalancerBuilder struct {
+	Filter loadbalance.Filter
 }
 
 func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker {
@@ -44,15 +56,17 @@ func (w *WeightBalancerBuilder) Build(info base.PickerBuildInfo) balancer.Picker
 		cs = append(cs, &weightConn{
 			c:      sub,
 			weight: weight,
+			addr:   subInfo.Address,
 		})
 	}
 	return &WeightBalancer{
 		connections: cs,
-		totalWeight: totalWeight,
+		filter:      w.Filter,
 	}
 }
 
 type weightConn struct {
 	c      balancer.SubConn
 	weight uint32
+	addr   resolver.Address
 }
