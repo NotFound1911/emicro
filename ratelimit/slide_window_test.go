@@ -11,9 +11,9 @@ import (
 	"time"
 )
 
-func TestFixWindowLimiter_BuildServerInterceptor(t *testing.T) {
+func TestSlideWindowLimiter_BuildServerInterceptor(t *testing.T) {
 	// 3s 一个请求
-	interceptor := NewFixWindowLimiter(time.Second*3, 1).BuildServerInterceptor()
+	interceptor := NewSlideWindowLimiter(time.Second*3, 1).BuildServerInterceptor()
 	cnt := 0
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		cnt++
@@ -26,7 +26,7 @@ func TestFixWindowLimiter_BuildServerInterceptor(t *testing.T) {
 	assert.Equal(t, cnt, 1)
 	
 	resp, err = interceptor(context.Background(), &gen.GetByIdReq{}, &grpc.UnaryServerInfo{}, handler)
-	require.Equal(t, errors.New("超出阈值"), err)
+	require.Equal(t, errors.New("达到上限"), err)
 	assert.Nil(t, resp)
 
 	// 等待3s 窗口新建
@@ -34,4 +34,5 @@ func TestFixWindowLimiter_BuildServerInterceptor(t *testing.T) {
 	resp, err = interceptor(context.Background(), &gen.GetByIdReq{}, &grpc.UnaryServerInfo{}, handler)
 	require.NoError(t, err)
 	assert.Equal(t, &gen.GetByIdResp{}, resp)
+
 }
