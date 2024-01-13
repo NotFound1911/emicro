@@ -19,3 +19,11 @@ services:
       - 12000:8080
     depends_on:
       - etcd
+  redis:
+    image: docker.io/bitnami/redis:7.0
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - '6379:6379'
+#    volumes:
+#      - 'redis_data:/bitnami/redis/data'
