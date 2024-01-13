@@ -19,6 +19,10 @@ type ServiceInstance struct {
 	Name string
 	// Addr 定位信息
 	Addr string
+	// Weight 权重
+	Weight uint32
+	// Group 分组
+	Group string
 }
 
 type Event struct {

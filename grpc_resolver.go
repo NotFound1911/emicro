@@ -3,6 +3,7 @@ package emicro
 import (
 	"context"
 	"github.com/NotFound1911/emicro/registry"
+	"google.golang.org/grpc/attributes"
 	"google.golang.org/grpc/resolver"
 	"time"
 )
@@ -75,7 +76,12 @@ func (g *grpcResolver) resolve() {
 	}
 	address := make([]resolver.Address, 0, len(instances))
 	for _, si := range instances {
-		address = append(address, resolver.Address{Addr: si.Addr})
+		address = append(address, resolver.Address{
+			Addr:       si.Addr,
+			ServerName: si.Name,
+			Attributes: attributes.New("weight", si.Weight).
+				WithValue("group", si.Group),
+		})
 	}
 	err = g.cc.UpdateState(resolver.State{Addresses: address})
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"github.com/NotFound1911/emicro/registry"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/balancer"
+	"google.golang.org/grpc/balancer/base"
 	"time"
 )
 
@@ -14,6 +16,7 @@ type Client struct {
 	insecure bool
 	r        registry.Registry
 	timeout  time.Duration
+	balancer balancer.Builder // 负载均衡算法
 }
 
 func NewClient(opts ...ClientOption) (*Client, error) {
@@ -34,6 +37,13 @@ func ClientWithRegistry(r registry.Registry, timeout time.Duration) ClientOption
 		c.timeout = timeout
 	}
 }
+func ClientWithPickerBuilder(name string, b base.PickerBuilder) ClientOption {
+	return func(c *Client) {
+		builder := base.NewBalancerBuilder(name, b, base.Config{HealthCheck: true})
+		balancer.Register(builder)
+		c.balancer = builder
+	}
+}
 func (c *Client) Dial(ctx context.Context, service string, dialOptions ...grpc.DialOption) (*grpc.ClientConn, error) {
 	var opts []grpc.DialOption
 	if c.r != nil {
@@ -45,6 +55,10 @@ func (c *Client) Dial(ctx context.Context, service string, dialOptions ...grpc.D
 	}
 	if c.insecure {
 		opts = append(opts, grpc.WithInsecure())
+	}
+	if c.balancer != nil {
+		opts = append(opts, grpc.WithDefaultServiceConfig(
+			fmt.Sprintf(`{"LoadBalancingPolicy": "%s"}`, c.balancer.Name())))
 	}
 	if len(dialOptions) > 0 {
 		opts = append(opts, dialOptions...)
